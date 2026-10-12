@@ -1,0 +1,40 @@
+---
+// Example: a single post page, e.g. /blog/my-first-post
+import { getPostBySlug } from "../../lib/cms";
+
+// Server-rendered: new and edited posts appear instantly (needs an SSR adapter).
+// For a fully static site, delete this line and use getStaticPaths() instead (see README).
+export const prerender = false;
+
+const { slug } = Astro.params;
+const post = slug ? await getPostBySlug(slug) : null;
+if (!post) return Astro.redirect("/404");
+
+// Custom fields work like ACF's get_field():
+const { event_date, venue, gallery } = post.customFields;
+---
+
+<html lang="en">
+  <head>
+    <title>{post.seoTitle}</title>
+    <meta name="description" content={post.seoDescription} />
+    {post.featuredImage && <meta property="og:image" content={post.featuredImage.url} />}
+  </head>
+  <body>
+    <article>
+      <h1>{post.title}</h1>
+      {post.featuredImage && <img src={post.featuredImage.url} alt={post.featuredImage.alt} />}
+
+      {event_date && <p><strong>Date:</strong> {event_date}</p>}
+      {venue && <p><strong>Venue:</strong> {venue}</p>}
+
+      <Fragment set:html={post.content} />
+
+      {Array.isArray(gallery) && gallery.length > 0 && (
+        <div class="gallery">
+          {gallery.map((img: { url: string; alt: string }) => <img src={img.url} alt={img.alt} loading="lazy" />)}
+        </div>
+      )}
+    </article>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+---
+// Example: list all posts in the "blog" category.
+// Change "blog" to any category slug, e.g. "news" or "events".
+import { getPosts } from "../../lib/cms";
+
+// Remove the next line if your site is fully static (then rebuild to show new posts).
+export const prerender = false;
+
+const posts = await getPosts({ category: "blog" });
+---
+
+<h1>Blog</h1>
+<ul>
+  {posts.map((post) => (
+    <li>
+      {post.featuredImage && (
+        <img src={post.featuredImage.url} alt={post.featuredImage.alt} width="400" loading="lazy" />
+      )}
+      <a href={`/blog/${post.slug}`}>{post.title}</a>
+      <time datetime={post.publishedAt?.toISOString()}>{post.publishedAt?.toLocaleDateString()}</time>
+      <p>{post.excerpt}</p>
+    </li>
+  ))}
+</ul>

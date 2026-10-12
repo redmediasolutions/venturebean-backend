@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Uploaded files are public (so your website can show them),
+// but only admins can upload or delete. Max file size: 20 MB.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /media/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+        && (request.resource == null || request.resource.size < 20 * 1024 * 1024);
+    }
+  }
+}

@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// ------------------------------------------------------------------
+//  Security rules for the CMS.
+//  • Anyone (your public Astro website) can READ published posts,
+//    categories, media and field groups.
+//  • Only ADMINS can create / edit / delete anything.
+//  • An admin = a user whose ID exists in the "admins" collection.
+// ------------------------------------------------------------------
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Each user may only check their OWN admin entry. Admins are added
+    // by hand in the Firebase Console, never from the app.
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Drafts stay private; published posts are public.
+    match /posts/{postId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /media/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /fieldGroups/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
