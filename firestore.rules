@@ -1,25 +1,45 @@
 rules_version = '2';
 
 // ------------------------------------------------------------------
-//  Security rules for the CMS.
-//  • Anyone (your public Astro website) can READ published posts,
-//    categories, media and field groups.
-//  • Only ADMINS can create / edit / delete anything.
-//  • An admin = a user whose ID exists in the "admins" collection.
+//  Firestore security rules for the CMS.
+//  • Your public website can READ published posts, categories, media.
+//  • Only ADMINS can create / edit / delete content.
+//  • Admin = a user whose ID is in the "admins" collection.
+//  • The very first account created becomes the owner (one time only).
 // ------------------------------------------------------------------
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null;
+    }
     function isAdmin() {
-      return request.auth != null
+      return signedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
+    function setupDone() {
+      return exists(/databases/$(database)/documents/settings/setup);
+    }
 
-    // Each user may only check their OWN admin entry. Admins are added
-    // by hand in the Firebase Console, never from the app.
     match /admins/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false;
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      // Admins add team members. The first-ever account may add ITSELF,
+      // only while setup isn't done, and only together with settings/setup.
+      allow create: if isAdmin()
+        || (signedIn() && request.auth.uid == uid && !setupDone()
+            && getAfter(/databases/$(database)/documents/settings/setup).data.ownerUid == uid);
+      allow update: if isAdmin();
+      // Admins can remove others, but not themselves.
+      allow delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    match /settings/{id} {
+      allow read: if true;
+      // "setup" is written once, by the first owner (or an existing admin).
+      allow create: if id == 'setup' && signedIn() && !setupDone()
+        && request.resource.data.ownerUid == request.auth.uid
+        && (isAdmin() || existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow create, update, delete: if id != 'setup' && isAdmin();
     }
 
     // Drafts stay private; published posts are public.
@@ -39,11 +59,6 @@ service cloud.firestore {
     }
 
     match /fieldGroups/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /settings/{id} {
       allow read: if true;
       allow write: if isAdmin();
     }

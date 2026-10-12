@@ -7,7 +7,7 @@ import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -61,4 +61,21 @@ export function storage(): FirebaseStorage {
     if (useEmulators) connectStorageEmulator(storageInstance, "127.0.0.1", 9199);
   }
   return storageInstance;
+}
+
+/**
+ * A temporary, separate Firebase app used ONLY to create accounts for team members.
+ * (Creating a user on the main app would sign the current admin out.)
+ */
+export async function withSecondaryAuth<T>(fn: (auth: Auth) => Promise<T>): Promise<T> {
+  const { deleteApp } = await import("firebase/app");
+  const secondary = initializeApp(firebaseConfig, `secondary-${Date.now()}`);
+  const auth = getAuth(secondary);
+  if (useEmulators) connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  try {
+    return await fn(auth);
+  } finally {
+    await auth.signOut().catch(() => {});
+    await deleteApp(secondary).catch(() => {});
+  }
 }

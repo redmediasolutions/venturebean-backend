@@ -36,6 +36,13 @@ export function getErrorMessage(error: unknown): string {
       "auth/user-disabled": "This account has been disabled.",
       "auth/too-many-requests": "Too many attempts. Please wait a minute and try again.",
       "auth/network-request-failed": "No internet connection.",
+      "auth/email-already-in-use": "An account with this email already exists. Try signing in instead.",
+      "auth/weak-password": "Password must be at least 6 characters.",
+      "auth/missing-password": "Please enter a password.",
+      "auth/operation-not-allowed":
+        "Email/Password sign-in is turned off. Turn it on in Firebase Console → Authentication → Sign-in method.",
+      "auth/admin-restricted-operation":
+        "Creating accounts is turned off in Firebase. Turn on “Enable create (sign-up)” in Firebase Console → Authentication → Settings → User actions.",
       "permission-denied": "You don't have permission to do this. Is your account added as an admin?",
       "storage/unauthorized": "You don't have permission to upload files.",
     };

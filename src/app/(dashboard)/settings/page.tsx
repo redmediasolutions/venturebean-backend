@@ -12,6 +12,7 @@ import { COLLECTIONS } from "@/firebase/collections";
 import { getErrorMessage } from "@/lib/format";
 import { useSiteSettings } from "@/features/settings/hooks/use-site-settings";
 import { SettingsForm } from "@/features/settings/components/settings-form";
+import { TeamCard } from "@/features/team/components/team-card";
 
 export default function SettingsPage() {
   const { user, resetPassword } = useAuth();
@@ -25,7 +26,7 @@ post.customFields.event_date; // your custom fields`;
 
   return (
     <>
-      <PageHeader title="Settings" description="Website details, your account, and how to connect your Astro site." />
+      <PageHeader title="Settings" description="Website details, your team, and how to connect your Astro site." />
       <div className="grid max-w-4xl gap-6">
         {loading ? (
           <div className="flex justify-center py-12">
@@ -35,10 +36,12 @@ post.customFields.event_date; // your custom fields`;
           <SettingsForm settings={settings} />
         )}
 
+        <TeamCard />
+
         <Card>
           <CardHeader className="border-b">
             <CardTitle>Your account</CardTitle>
-            <CardDescription>Admin accounts are managed in Firebase Console → Authentication.</CardDescription>
+            <CardDescription>Change your password by email.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">

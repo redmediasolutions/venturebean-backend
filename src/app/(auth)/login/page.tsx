@@ -1,23 +1,34 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
 import { isFirebaseConfigured } from "@/firebase/config";
 import { LoginForm } from "@/components/auth/login-form";
+import { SignupForm } from "@/components/auth/signup-form";
+import { RulesSetup } from "@/components/auth/rules-setup";
 import { SetupRequired } from "@/components/auth/setup-required";
 import { FullScreenLoader } from "@/components/auth/auth-guard";
+import { cn } from "@/lib/utils";
+
+type Mode = "signin" | "signup";
 
 export default function LoginPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, access, setup } = useAuth();
   const router = useRouter();
+  const [mode, setMode] = useState<Mode | null>(null);
+
+  // Nobody has set up the CMS yet → start on "Create account".
+  const activeMode: Mode = setup === "done" ? "signin" : mode ?? (setup === "needed" ? "signup" : "signin");
+  const canSignUp = setup === "needed" || setup === "blocked";
 
   useEffect(() => {
-    if (!loading && user) router.replace("/dashboard");
-  }, [loading, user, router]);
+    if (!loading && user && access !== "checking") router.replace("/dashboard");
+  }, [loading, user, access, router]);
 
   if (!isFirebaseConfigured) return <SetupRequired />;
-  if (loading || user) return <FullScreenLoader />;
+  // Keep the form on screen while signing in / creating the account, so errors stay visible.
+  if (setup === null || (loading && !user) || (user && access !== "checking")) return <FullScreenLoader />;
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
@@ -48,12 +59,45 @@ export default function LoginPage() {
 
       {/* Right: form */}
       <div className="flex items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-md space-y-8">
+          {setup === "blocked" && <RulesSetup />}
+
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-            <p className="text-sm text-muted-foreground">Sign in with your admin email and password.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {activeMode === "signup" ? "Create your account" : "Welcome back"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {activeMode === "signup"
+                ? "First time here? Create the owner account to start managing your website."
+                : "Sign in with your email and password."}
+            </p>
           </div>
-          <LoginForm />
+
+          {canSignUp && (
+            <div className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-medium">
+              {(["signin", "signup"] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  className={cn(
+                    "rounded-md py-1.5 text-muted-foreground transition-colors",
+                    activeMode === m && "bg-background text-foreground shadow-sm"
+                  )}
+                >
+                  {m === "signin" ? "Sign in" : "Create account"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeMode === "signup" ? <SignupForm /> : <LoginForm />}
+
+          {setup === "done" && (
+            <p className="text-center text-xs text-muted-foreground">
+              Need an account? Ask your admin to add you in Settings → Team.
+            </p>
+          )}
         </div>
       </div>
     </div>
