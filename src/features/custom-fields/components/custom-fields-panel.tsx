@@ -6,6 +6,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { CustomFieldInput } from "./custom-field-input";
+import { SHOW_ADVANCED } from "@/components/layout/nav-items";
 import type { CustomFieldValues, FieldGroup } from "../types";
 
 interface CustomFieldsPanelProps {
@@ -24,6 +25,7 @@ export function CustomFieldsPanel({ groups, values, onChange, errors = {} }: Cus
           <CardHeader className="border-b">
             <CardTitle>{group.title}</CardTitle>
             {group.description && <CardDescription>{group.description}</CardDescription>}
+            {SHOW_ADVANCED && (
             <CardAction>
               <Button variant="ghost" size="icon-sm" asChild aria-label="Edit field group">
                 <Link href={`/custom-fields/${group.id}`} target="_blank">
@@ -31,6 +33,7 @@ export function CustomFieldsPanel({ groups, values, onChange, errors = {} }: Cus
                 </Link>
               </Button>
             </CardAction>
+            )}
           </CardHeader>
           <CardContent className="space-y-6">
             {group.fields.length === 0 && <p className="text-sm text-muted-foreground">This group has no fields yet.</p>}

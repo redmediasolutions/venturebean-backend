@@ -1,4 +1,5 @@
-import { Blocks, FileText, Folder, Image, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { Award, Blocks, FileText, Folder, Image, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { SECTIONS } from "@/features/sections/lib/sections";
 
 export interface NavItem {
   label: string;
@@ -6,12 +7,43 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
-/** The menu on the left. Add or remove pages here. */
-export const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Posts", href: "/posts", icon: FileText },
-  { label: "Categories", href: "/categories", icon: Folder },
-  { label: "Custom Fields", href: "/custom-fields", icon: Blocks },
-  { label: "Media", href: "/media", icon: Image },
-  { label: "Settings", href: "/settings", icon: Settings },
+export interface NavGroup {
+  /** Small heading above the group (optional). */
+  title?: string;
+  items: NavItem[];
+}
+
+/**
+ * Show the general-purpose Posts / Categories / Custom Fields screens too.
+ * Off by default — editors only need the sections below.
+ */
+export const SHOW_ADVANCED = false;
+
+/** The menu on the left. Add, remove or reorder items here. */
+export const NAV_GROUPS: NavGroup[] = [
+  { items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }] },
+  {
+    title: "Knowledge Hub",
+    items: SECTIONS.map((s) => ({ label: s.name, href: `/content/${s.slug}`, icon: s.icon })),
+  },
+  {
+    title: "Website",
+    items: [
+      { label: "Logos", href: "/logos", icon: Award },
+      { label: "Media", href: "/media", icon: Image },
+    ],
+  },
+  ...(SHOW_ADVANCED
+    ? [
+        {
+          title: "Advanced",
+          items: [
+            { label: "All Posts", href: "/posts", icon: FileText },
+            { label: "Categories", href: "/categories", icon: Folder },
+            { label: "Custom Fields", href: "/custom-fields", icon: Blocks },
+          ],
+        },
+      ]
+    : []),
+  { title: "Admin", items: [{ label: "Settings", href: "/settings", icon: Settings }] },
 ];

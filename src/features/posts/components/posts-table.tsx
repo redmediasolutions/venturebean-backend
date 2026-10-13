@@ -50,9 +50,26 @@ interface PostsTableProps {
   categoriesById: Map<string, Category>;
   settings: SiteSettings;
   initialCategory?: string;
+  /** Where the post screens live, e.g. "/posts" or "/content/insights". */
+  basePath?: string;
+  /** Word used in buttons and messages, e.g. "post" or "insight". */
+  itemLabel?: string;
+  /** Hide the category dropdown (sections are already one category). */
+  showCategoryFilter?: boolean;
 }
 
-export function PostsTable({ posts, loading, categories, tree, categoriesById, settings, initialCategory }: PostsTableProps) {
+export function PostsTable({
+  posts,
+  loading,
+  categories,
+  tree,
+  categoriesById,
+  settings,
+  initialCategory,
+  basePath = "/posts",
+  itemLabel = "post",
+  showCategoryFilter = true,
+}: PostsTableProps) {
   const router = useRouter();
   const [status, setStatus] = useState<StatusFilter>("all");
   const [category, setCategory] = useState(initialCategory || ALL);
@@ -110,6 +127,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
           ))}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
+          {showCategoryFilter && (
           <Select
             value={category}
             onValueChange={(v) => {
@@ -130,10 +148,11 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
               ))}
             </SelectContent>
           </Select>
+          )}
           <div className="relative sm:w-64">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search posts…"
+              placeholder={`Search ${itemLabel}s…`}
               value={searchInput}
               onChange={(e) => {
                 setSearchInput(e.target.value);
@@ -155,13 +174,13 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
       ) : rows.length === 0 ? (
         <EmptyState
           icon={FileText}
-          title={posts.length === 0 ? "No posts yet" : "No posts match these filters"}
-          description={posts.length === 0 ? "Write your first post — it will appear on your website once published." : undefined}
+          title={posts.length === 0 ? `No ${itemLabel}s yet` : `No ${itemLabel}s match these filters`}
+          description={posts.length === 0 ? `Add your first ${itemLabel} — it will appear on your website once published.` : undefined}
           action={
             posts.length === 0 ? (
               <Button asChild>
-                <Link href="/posts/new">
-                  <Plus /> New post
+                <Link href={`${basePath}/new`}>
+                  <Plus /> New {itemLabel}
                 </Link>
               </Button>
             ) : (
@@ -184,7 +203,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
             <TableHeader>
               <TableRow>
                 <TableHead className="sm:min-w-[280px]">Title</TableHead>
-                <TableHead className="hidden md:table-cell">Categories</TableHead>
+                {showCategoryFilter && <TableHead className="hidden md:table-cell">Categories</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden sm:table-cell">Date</TableHead>
                 <TableHead className="w-12" />
@@ -194,7 +213,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
               {rows.map((p) => {
                 const url = p.status === "published" ? buildPostUrl(settings, p.slug) : null;
                 return (
-                  <TableRow key={p.id} className="cursor-pointer" onClick={() => router.push(`/posts/${p.id}`)}>
+                  <TableRow key={p.id} className="cursor-pointer" onClick={() => router.push(`${basePath}/${p.id}`)}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="size-10 shrink-0 overflow-hidden rounded-md border bg-muted">
@@ -206,6 +225,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
                         </div>
                       </div>
                     </TableCell>
+                    {showCategoryFilter && (
                     <TableCell className="hidden md:table-cell">
                       <div className="flex max-w-xs flex-wrap gap-1">
                         {p.categoryIds.length === 0 && <span className="text-muted-foreground">—</span>}
@@ -218,6 +238,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
                         )}
                       </div>
                     </TableCell>
+                    )}
                     <TableCell>
                       <PostStatusBadge post={p} />
                     </TableCell>
@@ -243,7 +264,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link href={`/posts/${p.id}`}>
+                            <Link href={`${basePath}/${p.id}`}>
                               <Pencil /> Edit
                             </Link>
                           </DropdownMenuItem>
@@ -259,7 +280,7 @@ export function PostsTable({ posts, loading, categories, tree, categoriesById, s
                               try {
                                 const res = await duplicatePost(p, categories);
                                 toast.success("Copy created as a draft");
-                                router.push(`/posts/${res.id}`);
+                                router.push(`${basePath}/${res.id}`);
                               } catch (err) {
                                 toast.error(getErrorMessage(err));
                               }

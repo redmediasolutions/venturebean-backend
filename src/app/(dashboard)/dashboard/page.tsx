@@ -1,18 +1,21 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
-import { Blocks, FileText, Folder, Image, PenLine, Plus } from "lucide-react";
+import { Award, Plus } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
 import { usePosts } from "@/features/posts/hooks/use-posts";
 import { PostStatusBadge } from "@/features/posts/lib/post-status";
 import { useCategories } from "@/features/categories/hooks/use-categories";
-import { useMedia } from "@/features/media/hooks/use-media";
-import { useFieldGroups } from "@/features/custom-fields/hooks/use-field-groups";
+import { SECTIONS } from "@/features/sections/lib/sections";
+import { useSections } from "@/features/sections/hooks/use-sections";
+import { useLogos } from "@/features/logos/hooks/use-logos";
 import { StatCard } from "@/features/dashboard/components/stat-card";
 import { QuickDraft } from "@/features/dashboard/components/quick-draft";
 
@@ -23,46 +26,58 @@ function greeting() {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { posts, countsByCategory, loading } = usePosts();
-  const { categories, tree, loading: catLoading } = useCategories();
-  const { media, loading: mediaLoading } = useMedia();
-  const { groups } = useFieldGroups();
+  const { posts, loading } = usePosts();
+  const { categories } = useCategories();
+  const { categoryIds } = useSections();
+  const { logos, groups, loading: logosLoading } = useLogos();
 
-  const published = posts.filter((p) => p.status === "published").length;
-  const drafts = posts.filter((p) => p.status === "draft").length;
   const rawName = user?.displayName || user?.email?.split("@")[0] || "";
   const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+
+  // Which section does each post belong to?
+  const sectionOf = useMemo(() => {
+    const bySectionId = new Map(SECTIONS.map((s) => [categoryIds[s.slug], s]));
+    return (categoryIdsOfPost: string[]) => categoryIdsOfPost.map((id) => bySectionId.get(id)).find(Boolean) ?? null;
+  }, [categoryIds]);
+
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of posts) {
+      const s = sectionOf(p.categoryIds);
+      if (s) m.set(s.slug, (m.get(s.slug) ?? 0) + 1);
+    }
+    return m;
+  }, [posts, sectionOf]);
+
+  const recent = useMemo(
+    () =>
+      posts
+        .flatMap((p) => {
+          const section = sectionOf(p.categoryIds);
+          return section ? [{ post: p, section }] : [];
+        })
+        .slice(0, 8),
+    [posts, sectionOf]
+  );
 
   return (
     <>
       <PageHeader
         title={`${greeting()}${name ? `, ${name}` : ""}`}
-        description="Here's what's happening with your website content."
-        actions={
-          <Button asChild>
-            <Link href="/posts/new">
-              <Plus /> New post
-            </Link>
-          </Button>
-        }
+        description="Here's what's on your website's Knowledge Hub."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Published posts" value={published} icon={FileText} href="/posts" loading={loading} />
-        <StatCard label="Drafts" value={drafts} icon={PenLine} href="/posts" loading={loading} />
-        <StatCard label="Categories" value={categories.length} icon={Folder} href="/categories" loading={catLoading} />
-        <StatCard label="Media files" value={media.length} icon={Image} href="/media" loading={mediaLoading} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {SECTIONS.map((s) => (
+          <StatCard key={s.slug} label={s.name} value={counts.get(s.slug) ?? 0} icon={s.icon} href={`/content/${s.slug}`} loading={loading} />
+        ))}
+        <StatCard label="Logos" value={logos.length} icon={Award} href="/logos" loading={logosLoading} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
         <Card className="gap-0 pb-0">
           <CardHeader className="border-b">
             <CardTitle>Recently edited</CardTitle>
-            <CardAction>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/posts">View all</Link>
-              </Button>
-            </CardAction>
           </CardHeader>
           {loading ? (
             <div className="space-y-3 p-5">
@@ -70,21 +85,33 @@ export default function DashboardPage() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : posts.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              No posts yet.{" "}
-              <Link href="/posts/new" className="text-foreground underline underline-offset-4">
-                Write your first one
-              </Link>
+          ) : recent.length === 0 ? (
+            <div className="space-y-4 p-8 text-center text-sm text-muted-foreground">
+              <p>Nothing here yet. Start with one of the sections:</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {SECTIONS.map((s) => (
+                  <Button key={s.slug} variant="outline" size="sm" asChild>
+                    <Link href={`/content/${s.slug}/new`}>
+                      <Plus /> {s.name}
+                    </Link>
+                  </Button>
+                ))}
+              </div>
             </div>
           ) : (
             <ul className="divide-y">
-              {posts.slice(0, 6).map((p) => (
+              {recent.map(({ post: p, section: s }) => (
                 <li key={p.id}>
-                  <Link href={`/posts/${p.id}`} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40">
+                  <Link
+                    href={`/content/${s.slug}/${p.id}`}
+                    className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40"
+                  >
+                    <s.icon className="size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{p.title || "(no title)"}</p>
-                      <p className="text-xs text-muted-foreground">Edited {formatDate(p.updatedAt, true)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {s.name} · edited {formatDate(p.updatedAt, true)}
+                      </p>
                     </div>
                     <PostStatusBadge post={p} />
                   </Link>
@@ -99,31 +126,25 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Posts by category</CardTitle>
+              <CardTitle>Logo groups</CardTitle>
             </CardHeader>
             <CardContent>
-              {tree.length === 0 ? (
+              {groups.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No categories yet.{" "}
-                  <Link href="/categories" className="text-foreground underline underline-offset-4">
-                    Add one
+                  No groups yet.{" "}
+                  <Link href="/logos" className="text-foreground underline underline-offset-4">
+                    Add logos
                   </Link>
                 </p>
               ) : (
-                <ul className="space-y-2 text-sm">
-                  {tree.slice(0, 8).map((c) => (
-                    <li key={c.id} className="flex items-center justify-between" style={{ paddingLeft: c.depth * 14 }}>
-                      <Link href={`/posts?category=${c.id}`} className="hover:underline">
-                        {c.name}
-                      </Link>
-                      <span className="text-muted-foreground tabular-nums">{countsByCategory.get(c.id) ?? 0}</span>
-                    </li>
+                <div className="flex flex-wrap gap-1.5">
+                  {groups.map((g) => (
+                    <Badge key={g.id} variant="secondary" className="font-normal">
+                      {g.name} <span className="text-muted-foreground tabular-nums">{g.count}</span>
+                    </Badge>
                   ))}
-                </ul>
+                </div>
               )}
-              <div className="mt-4 flex items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
-                <Blocks className="size-3.5" /> {groups.length} custom field group{groups.length === 1 ? "" : "s"}
-              </div>
             </CardContent>
           </Card>
         </div>

@@ -13,8 +13,8 @@ interface StatCardProps {
 
 export function StatCard({ label, value, icon: Icon, href, loading }: StatCardProps) {
   return (
-    <Link href={href} className="group">
-      <Card className="py-4 transition-colors group-hover:border-foreground/30">
+    <Link href={href} className="group h-full">
+      <Card className="h-full justify-center py-4 transition-colors group-hover:border-foreground/30">
         <CardContent className="flex items-center justify-between px-4">
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">{label}</p>

@@ -78,4 +78,5 @@ export async function withSecondaryAuth<T>(fn: (auth: Auth) => Promise<T>): Prom
     await auth.signOut().catch(() => {});
     await deleteApp(secondary).catch(() => {});
   }
+  
 }

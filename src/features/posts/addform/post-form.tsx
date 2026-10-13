@@ -37,9 +37,19 @@ interface PostFormProps {
   post?: Post;
   /** Pre-select a category when creating (from ?category=…). */
   defaultCategoryId?: string;
+  /**
+   * Sections (Insights, Toolkit, …) are one category each: the post is always
+   * saved in it and the Categories box is hidden.
+   */
+  lockedCategoryId?: string;
+  /** Where the post screens live, e.g. "/posts" or "/content/insights". */
+  basePath?: string;
+  /** Word used in messages, e.g. "post" or "insight". */
+  itemLabel?: string;
 }
 
-export function PostForm({ post, defaultCategoryId }: PostFormProps) {
+export function PostForm({ post, defaultCategoryId, lockedCategoryId, basePath = "/posts", itemLabel = "post" }: PostFormProps) {
+  const Label = itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1);
   const router = useRouter();
   const { user } = useAuth();
   const { categories, tree, loading: categoriesLoading } = useCategories();
@@ -52,7 +62,7 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
     content: post?.content ?? "",
     excerpt: post?.excerpt ?? "",
     featuredImage: post?.featuredImage ?? null,
-    categoryIds: post?.categoryIds ?? (defaultCategoryId ? [defaultCategoryId] : []),
+    categoryIds: post?.categoryIds ?? (lockedCategoryId ? [lockedCategoryId] : defaultCategoryId ? [defaultCategoryId] : []),
     status: post?.status ?? "draft",
     publishedAt: post?.publishedAt ?? null,
     seoTitle: post?.seoTitle ?? "",
@@ -79,7 +89,14 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
   const liveUrl = post && isPublished && values.slug ? buildPostUrl(settings, values.slug) : null;
 
   async function save(status: PostStatus) {
-    const input = { ...values, status };
+    const input = {
+      ...values,
+      status,
+      categoryIds:
+        lockedCategoryId && !values.categoryIds.includes(lockedCategoryId)
+          ? [...values.categoryIds, lockedCategoryId]
+          : values.categoryIds,
+    };
     if (status === "published") {
       const errors = validateCustomFields(input, groups);
       setFieldErrors(errors);
@@ -96,9 +113,9 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
       setSavedStatus(status);
       setDirty(false);
       toast.success(
-        status === "published" ? (isPublished ? "Post updated" : "Post published") : isPublished ? "Post moved to drafts" : "Draft saved"
+        status === "published" ? (isPublished ? `${Label} updated` : `${Label} published`) : isPublished ? "Post moved to drafts" : "Draft saved"
       );
-      if (!post) router.replace(`/posts/${result.id}`);
+      if (!post) router.replace(`${basePath}/${result.id}`);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -125,7 +142,9 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
           />
           <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
             <span>Slug:</span>
-            <span className="font-mono text-xs">{(settings.postUrlPattern || "/blog/{slug}").split("{slug}")[0]}</span>
+            {!lockedCategoryId && (
+              <span className="font-mono text-xs">{(settings.postUrlPattern || "/blog/{slug}").split("{slug}")[0]}</span>
+            )}
             <Input
               value={values.slug}
               onChange={(e) => {
@@ -165,7 +184,7 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
         <Card>
           <CardHeader>
             <CardTitle>SEO</CardTitle>
-            <CardDescription>How this post appears on Google. Leave empty to use the title and excerpt.</CardDescription>
+            <CardDescription>How this page appears on Google. Leave empty to use the title and excerpt.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <FormField label="SEO title" help={`${values.seoTitle.length}/60 characters recommended`}>
@@ -244,13 +263,14 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
                   onClick={() => setConfirmDelete(true)}
                   className="flex items-center gap-1.5 text-xs text-destructive hover:underline"
                 >
-                  <Trash2 className="size-3.5" /> Delete post
+                  <Trash2 className="size-3.5" /> Delete {itemLabel}
                 </button>
               </>
             )}
           </CardContent>
         </Card>
 
+        {!lockedCategoryId && (
         <Card>
           <CardHeader>
             <CardTitle>Categories</CardTitle>
@@ -267,6 +287,7 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
             </Link>
           </CardContent>
         </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -282,14 +303,14 @@ export function PostForm({ post, defaultCategoryId }: PostFormProps) {
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          title="Delete this post permanently?"
+          title={`Delete this ${itemLabel} permanently?`}
           description="It will be removed from your website. This cannot be undone."
           onConfirm={async () => {
             try {
               await deletePost(post.id);
               setDirty(false);
-              toast.success("Post deleted");
-              router.replace("/posts");
+              toast.success(`${Label} deleted`);
+              router.replace(basePath);
             } catch (err) {
               toast.error(getErrorMessage(err));
             }

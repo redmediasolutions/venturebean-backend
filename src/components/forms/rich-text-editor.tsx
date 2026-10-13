@@ -81,7 +81,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writingâ€
   }, [value, editor]);
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-background shadow-xs focus-within:border-ring/60">
+    <div className="overflow-clip rounded-lg border bg-background shadow-xs focus-within:border-ring/60">
       <Toolbar
         editor={editor}
         htmlMode={htmlMode}

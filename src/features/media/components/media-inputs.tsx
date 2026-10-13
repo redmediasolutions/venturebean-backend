@@ -18,10 +18,13 @@ export function ImageInput({
   value,
   onChange,
   showAlt = false,
+  contain = false,
 }: {
   value: MediaRef | null;
   onChange: (v: MediaRef | null) => void;
   showAlt?: boolean;
+  /** Show the whole image (logos) instead of cropping it. */
+  contain?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -29,7 +32,7 @@ export function ImageInput({
       {value ? (
         <div className="group relative overflow-hidden rounded-lg border">
           <button type="button" onClick={() => setOpen(true)} className="block w-full" title="Replace image">
-            <MediaThumb url={value.url} name={value.name} contentType={value.contentType} alt={value.alt} className="aspect-video" />
+            <MediaThumb url={value.url} name={value.name} contentType={value.contentType} alt={value.alt} className="aspect-video" contain={contain} />
           </button>
           <Button
             type="button"
