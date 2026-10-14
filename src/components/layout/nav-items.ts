@@ -5,12 +5,16 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Only highlight on this exact URL (not on pages below it). */
+  exact?: boolean;
 }
 
 export interface NavGroup {
   /** Small heading above the group (optional). */
   title?: string;
   items: NavItem[];
+  /** List every post category under this group (/posts/<category>). */
+  postCategories?: boolean;
 }
 
 /**
@@ -22,7 +26,11 @@ export const SHOW_ADVANCED = false;
 /** The menu on the left. Add, remove or reorder items here. */
 export const NAV_GROUPS: NavGroup[] = [
   { items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }] },
-  { items: [{ label: "Posts", href: "/posts", icon: LayoutDashboard }] },
+  {
+    title: "Posts",
+    items: [{ label: "All posts", href: "/posts", icon: FileText, exact: true }],
+    postCategories: true,
+  },
   {
     title: "Website",
     items: [

@@ -11,7 +11,7 @@ import { SectionGate } from "@/features/sections/components/section-gate";
 
 export default function EditSectionItemPage() {
   const { id } = useParams<{ id: string }>();
-  const { post, loading, notFound } = usePost(id);
+  const { post, loading, error } = usePost(id);
 
   return (
     <SectionGate>
@@ -33,7 +33,7 @@ export default function EditSectionItemPage() {
               <div className="flex justify-center py-24">
                 <Loader2 className="size-6 animate-spin text-muted-foreground" />
               </div>
-            ) : notFound || !post ? (
+            ) : error || !post ? (
               <EmptyState
                 icon={FileX}
                 title="Not found"

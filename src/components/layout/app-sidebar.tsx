@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Award, ChevronDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS } from "./nav-items";
+import { PostCategoryLinks } from "./post-category-links";
 import { ProfileMenu } from "@/components/profile-menu";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,7 +72,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <p className="px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{group.title}</p>
             )}
             {group.items.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              const active = item.exact
+                ? pathname === item.href || (item.href === "/posts" && /^\/posts\/new\b/.test(pathname))
+                : pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
@@ -87,6 +90,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 </Link>
               );
             })}
+            {group.postCategories && <PostCategoryLinks pathname={pathname} onNavigate={onNavigate} />}
           </div>
         ))}
       </nav>

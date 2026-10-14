@@ -2,25 +2,16 @@
  * Makes sure the Knowledge Hub categories and the "Links & downloads" fields exist.
  * Runs automatically the first time an admin opens the panel — nothing to set up by hand.
  */
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { COLLECTIONS } from "@/firebase/collections";
 import type { Category } from "@/features/categories/types";
+import { createCategory as createCategoryViaApi } from "@/features/categories/repository/category-repository";
+import { createFieldGroup } from "@/features/custom-fields/repository/field-group-repository";
 import type { FieldGroup } from "@/features/custom-fields/types";
 import { KNOWLEDGE_HUB, SECTIONS } from "../lib/sections";
 
 export const SECTION_FIELDS_TITLE = "Links & downloads";
 
 async function createCategory(name: string, slug: string, parentId: string | null) {
-  const ref = await addDoc(collection(db(), COLLECTIONS.categories), {
-    name,
-    slug,
-    description: "",
-    parentId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return ref.id;
+  return createCategoryViaApi({ name, slug, description: "", parentId });
 }
 
 /** Returns slug → category id for every section, creating any that are missing. */
@@ -48,7 +39,7 @@ export async function ensureSectionFields(groups: FieldGroup[], sectionCategoryI
     placeholder: "",
     options: [],
   });
-  await addDoc(collection(db(), COLLECTIONS.fieldGroups), {
+  await createFieldGroup({
     title: SECTION_FIELDS_TITLE,
     description: "Optional — link to the original article/video, or a file people can download.",
     location: "categories",
@@ -59,7 +50,5 @@ export async function ensureSectionFields(groups: FieldGroup[], sectionCategoryI
     ],
     active: true,
     order: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   });
 }

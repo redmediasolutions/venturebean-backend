@@ -22,6 +22,7 @@ import {
 
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 // ============================================================
 // ADMIN INITIALIZATION
@@ -209,4 +210,12 @@ export async function verifyFirebaseIdToken(token: string) {
  */
 export function adminDb(): Firestore {
   return getFirestore(getAdminApp());
+}
+// ============================================================
+// ADMIN STORAGE (only used to delete older Media uploads that
+// were stored in Firebase Storage — new uploads go to S3)
+// ============================================================
+
+export function adminStorage() {
+  return getStorage(getAdminApp());
 }

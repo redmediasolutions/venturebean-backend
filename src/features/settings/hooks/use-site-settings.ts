@@ -1,24 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useApiResource } from "@/hooks/use-api-resource";
 import { DEFAULT_SETTINGS, type SiteSettings } from "../types";
-import { subscribeToSettings } from "../repository/settings-repository";
+import { fetchSettings, SETTINGS_KEY } from "../repository/settings-repository";
 
+/** Website settings (name, address, post URL pattern). */
 export function useSiteSettings() {
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    return subscribeToSettings(
-      (s) => {
-        setSettings(s);
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
-  }, []);
-
-  return { settings, loading };
+  const { data, loading } = useApiResource<SiteSettings>(SETTINGS_KEY, fetchSettings, DEFAULT_SETTINGS);
+  return { settings: data, loading };
 }
 
 /** Build the public URL of a post on the live website (or null if not set up). */

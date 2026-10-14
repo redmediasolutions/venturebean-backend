@@ -39,6 +39,9 @@ export interface Post {
   authorId: string;
   authorName: string;
 
+  /** WordPress post ID, when the post was imported from WordPress (used to skip duplicates). */
+  wordpressId?: number | null;
+
   /** Original creation date. */
   createdAt: Date | null;
 

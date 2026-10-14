@@ -1,87 +1,55 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { db, storage } from "@/firebase/config";
-import { COLLECTIONS, MEDIA_FOLDER } from "@/firebase/collections";
-import { toDate } from "@/firebase/converters";
-import { readImageSize, safeFileName } from "../lib/media-utils";
+/**
+ * Media Library — files are uploaded through /api/media, which stores them
+ * on Amazon S3 (same bucket as the WordPress importer).
+ */
+import { apiDelete, apiGet, apiPatch, apiUpload, toDate } from "@/lib/api-client";
+import { invalidate } from "@/hooks/use-api-resource";
+import { readImageSize } from "../lib/media-utils";
 import type { MediaItem } from "../types";
 
-export const mediaQuery = () => query(collection(db(), COLLECTIONS.media), orderBy("createdAt", "desc"));
+export const MEDIA_KEY = "media";
 
-export function mapMedia(d: QueryDocumentSnapshot<DocumentData>): MediaItem {
-  const data = d.data({ serverTimestamps: "estimate" });
+export function mapMedia(raw: Record<string, unknown>): MediaItem {
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
   return {
-    id: d.id,
-    name: data.name ?? "",
-    url: data.url ?? "",
-    path: data.path ?? "",
-    contentType: data.contentType ?? "",
-    size: data.size ?? 0,
-    alt: data.alt ?? "",
-    width: data.width ?? null,
-    height: data.height ?? null,
-    createdAt: toDate(data.createdAt),
+    id: String(raw.id),
+    name: String(raw.name ?? ""),
+    url: String(raw.url ?? ""),
+    path: String(raw.path ?? ""),
+    contentType: String(raw.contentType ?? ""),
+    size: typeof raw.size === "number" ? raw.size : 0,
+    alt: String(raw.alt ?? ""),
+    width: num(raw.width),
+    height: num(raw.height),
+    createdAt: toDate(raw.createdAt),
   };
 }
 
-/** Upload a file to Firebase Storage and add it to the Media Library. */
+export async function fetchMedia(): Promise<MediaItem[]> {
+  const { media } = await apiGet<{ media: Record<string, unknown>[] }>("/api/media");
+  return (media ?? []).map(mapMedia);
+}
+
+/** Upload a file to the Media Library (S3). */
 export async function uploadMediaFile(file: File, onProgress?: (percent: number) => void): Promise<MediaItem> {
-  const now = new Date();
-  const folder = `${MEDIA_FOLDER}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const path = `${folder}/${Date.now()}-${safeFileName(file.name)}`;
-  const storageRef = ref(storage(), path);
   const size = await readImageSize(file);
-
-  const task = uploadBytesResumable(storageRef, file, {
-    contentType: file.type || "application/octet-stream",
-    cacheControl: "public, max-age=31536000",
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    task.on(
-      "state_changed",
-      (snap) => onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-      reject,
-      () => resolve()
-    );
-  });
-
-  const url = await getDownloadURL(storageRef);
-  const record = {
-    name: file.name,
-    url,
-    path,
-    contentType: file.type || "application/octet-stream",
-    size: file.size,
-    alt: "",
-    width: size?.width ?? null,
-    height: size?.height ?? null,
-  };
-  const docRef = await addDoc(collection(db(), COLLECTIONS.media), { ...record, createdAt: serverTimestamp() });
-  return { id: docRef.id, ...record, createdAt: now };
+  const form = new FormData();
+  form.append("file", file);
+  if (size) {
+    form.append("width", String(size.width));
+    form.append("height", String(size.height));
+  }
+  const { media } = await apiUpload<{ media: Record<string, unknown> }>("/api/media", form, onProgress);
+  invalidate(MEDIA_KEY);
+  return mapMedia(media);
 }
 
 export async function updateMediaDetails(id: string, data: { alt: string; name: string }) {
-  await updateDoc(doc(db(), COLLECTIONS.media, id), data);
+  await apiPatch(`/api/media/${encodeURIComponent(id)}`, data);
+  invalidate(MEDIA_KEY);
 }
 
 export async function deleteMediaItem(item: MediaItem) {
-  try {
-    await deleteObject(ref(storage(), item.path));
-  } catch (err) {
-    // If the file is already gone from Storage, still remove the library entry.
-    if ((err as { code?: string }).code !== "storage/object-not-found") throw err;
-  }
-  await deleteDoc(doc(db(), COLLECTIONS.media, item.id));
+  await apiDelete(`/api/media/${encodeURIComponent(item.id)}`);
+  invalidate(MEDIA_KEY);
 }

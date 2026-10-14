@@ -1,18 +1,16 @@
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { COLLECTIONS } from "@/firebase/collections";
+/** Website settings — read and saved through /api/settings. */
+import { apiGet, apiPut } from "@/lib/api-client";
+import { invalidate } from "@/hooks/use-api-resource";
 import { DEFAULT_SETTINGS, type SiteSettings } from "../types";
 
-const settingsDoc = () => doc(db(), COLLECTIONS.settings, "general");
+export const SETTINGS_KEY = "settings";
 
-export function subscribeToSettings(cb: (s: SiteSettings) => void, onError?: (e: Error) => void) {
-  return onSnapshot(
-    settingsDoc(),
-    (snap) => cb({ ...DEFAULT_SETTINGS, ...(snap.data() as Partial<SiteSettings> | undefined) }),
-    (e) => onError?.(e)
-  );
+export async function fetchSettings(): Promise<SiteSettings> {
+  const { settings } = await apiGet<{ settings: Partial<SiteSettings> }>("/api/settings");
+  return { ...DEFAULT_SETTINGS, ...(settings ?? {}) };
 }
 
 export async function saveSettings(settings: SiteSettings) {
-  await setDoc(settingsDoc(), { ...settings, updatedAt: serverTimestamp() }, { merge: true });
+  await apiPut("/api/settings", settings);
+  invalidate(SETTINGS_KEY);
 }

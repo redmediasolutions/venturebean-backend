@@ -1,32 +1,21 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  type DocumentData,
-  type DocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { COLLECTIONS } from "@/firebase/collections";
-import { stripUndefined, toDate } from "@/firebase/converters";
+/**
+ * Custom field groups — read and saved through /api/field-groups.
+ */
+import { apiDelete, apiGet, apiPatch, apiPost, toDate } from "@/lib/api-client";
+import { invalidate } from "@/hooks/use-api-resource";
 import type { FieldGroup, FieldGroupInput } from "../types";
 
-export const fieldGroupsQuery = () => query(collection(db(), COLLECTIONS.fieldGroups), orderBy("order"));
+export const FIELD_GROUPS_KEY = "field-groups";
 
-export function mapFieldGroup(d: DocumentSnapshot<DocumentData>): FieldGroup {
-  const data = d.data() ?? {};
+export function mapFieldGroup(raw: Record<string, unknown>): FieldGroup {
+  const fields = Array.isArray(raw.fields) ? (raw.fields as Record<string, unknown>[]) : [];
   return {
-    id: d.id,
-    title: data.title ?? "",
-    description: data.description ?? "",
-    location: data.location === "categories" ? "categories" : "all",
-    categoryIds: data.categoryIds ?? [],
-    fields: (data.fields ?? []).map((f: Record<string, unknown>) => ({
+    id: String(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    location: raw.location === "categories" ? "categories" : "all",
+    categoryIds: Array.isArray(raw.categoryIds) ? raw.categoryIds.map(String) : [],
+    fields: fields.map((f) => ({
       id: String(f.id ?? Math.random().toString(36).slice(2, 10)),
       label: String(f.label ?? ""),
       name: String(f.name ?? ""),
@@ -36,34 +25,39 @@ export function mapFieldGroup(d: DocumentSnapshot<DocumentData>): FieldGroup {
       placeholder: String(f.placeholder ?? ""),
       options: Array.isArray(f.options) ? f.options.map(String) : [],
     })),
-    active: data.active !== false,
-    order: typeof data.order === "number" ? data.order : 0,
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
+    active: raw.active !== false,
+    order: typeof raw.order === "number" ? raw.order : 0,
+    createdAt: toDate(raw.createdAt),
+    updatedAt: toDate(raw.updatedAt),
   };
 }
 
+export async function fetchFieldGroups(): Promise<FieldGroup[]> {
+  const { groups } = await apiGet<{ groups: Record<string, unknown>[] }>("/api/field-groups");
+  return (groups ?? []).map(mapFieldGroup).sort((a, b) => a.order - b.order);
+}
+
 export async function getFieldGroup(id: string): Promise<FieldGroup | null> {
-  const snap = await getDoc(doc(db(), COLLECTIONS.fieldGroups, id));
-  return snap.exists() ? mapFieldGroup(snap) : null;
+  try {
+    const { group } = await apiGet<{ group: Record<string, unknown> }>(`/api/field-groups/${encodeURIComponent(id)}`);
+    return group ? mapFieldGroup(group) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function createFieldGroup(input: FieldGroupInput) {
-  const ref = await addDoc(collection(db(), COLLECTIONS.fieldGroups), {
-    ...stripUndefined(input as unknown as Record<string, unknown>),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return ref.id;
+  const { id } = await apiPost<{ id: string }>("/api/field-groups", input);
+  invalidate(FIELD_GROUPS_KEY);
+  return id;
 }
 
 export async function updateFieldGroup(id: string, input: Partial<FieldGroupInput>) {
-  await updateDoc(doc(db(), COLLECTIONS.fieldGroups, id), {
-    ...stripUndefined(input as unknown as Record<string, unknown>),
-    updatedAt: serverTimestamp(),
-  });
+  await apiPatch(`/api/field-groups/${encodeURIComponent(id)}`, input);
+  invalidate(FIELD_GROUPS_KEY);
 }
 
 export async function deleteFieldGroup(id: string) {
-  await deleteDoc(doc(db(), COLLECTIONS.fieldGroups, id));
+  await apiDelete(`/api/field-groups/${encodeURIComponent(id)}`);
+  invalidate(FIELD_GROUPS_KEY);
 }

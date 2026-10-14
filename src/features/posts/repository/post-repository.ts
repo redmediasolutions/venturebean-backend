@@ -1,4 +1,8 @@
 import type { Post } from "@/features/posts/types";
+import { invalidate } from "@/hooks/use-api-resource";
+
+/** Shared cache key — every screen showing posts refreshes when this is invalidated. */
+export const POSTS_KEY = "posts";
 
 const POSTS_API = "/api/posts";
 
@@ -342,6 +346,8 @@ export async function createPost(
     body: JSON.stringify(payload),
   });
 
+  invalidate(POSTS_KEY);
+
   if (isObject(response)) {
     if (typeof response.id === "string") {
       return response.id;
@@ -381,6 +387,8 @@ export async function updatePost(
       body: JSON.stringify(payload),
     },
   );
+
+  invalidate(POSTS_KEY);
 }
 
 /**
@@ -401,6 +409,8 @@ export async function setPostStatus(
       body: JSON.stringify({ status }),
     },
   );
+
+  invalidate(POSTS_KEY);
 }
 
 /**
@@ -417,4 +427,6 @@ export async function deletePost(id: string): Promise<void> {
       method: "DELETE",
     },
   );
+
+  invalidate(POSTS_KEY);
 }

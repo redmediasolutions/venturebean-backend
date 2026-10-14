@@ -56,6 +56,12 @@ interface PostsTableProps {
   itemLabel?: string;
   /** Hide the category dropdown (sections are already one category). */
   showCategoryFilter?: boolean;
+  /**
+   * Control the category dropdown from outside (e.g. from the URL /posts/coaching).
+   * When set, choosing a category calls this instead of filtering locally.
+   */
+  categoryValue?: string;
+  onCategoryChange?: (categoryId: string | null) => void;
 }
 
 export function PostsTable({
@@ -69,29 +75,34 @@ export function PostsTable({
   basePath = "/posts",
   itemLabel = "post",
   showCategoryFilter = true,
+  categoryValue,
+  onCategoryChange,
 }: PostsTableProps) {
   const router = useRouter();
   const [status, setStatus] = useState<StatusFilter>("all");
-  const [category, setCategory] = useState(initialCategory || ALL);
+  const [localCategory, setLocalCategory] = useState(initialCategory || ALL);
+  const category = onCategoryChange ? categoryValue || ALL : localCategory;
+  const setCategory = (v: string) => (onCategoryChange ? onCategoryChange(v === ALL ? null : v) : setLocalCategory(v));
   const [searchInput, setSearchInput] = useState("");
   const search = useDebounce(searchInput);
   const [page, setPage] = useState(0);
   const [deleting, setDeleting] = useState<Post | null>(null);
 
-  const counts = useMemo(
-    () => ({
-      all: posts.length,
-      published: posts.filter((p) => p.status === "published").length,
-      draft: posts.filter((p) => p.status === "draft").length,
-    }),
-    [posts]
-  );
+  // Counts for the All / Published / Drafts tabs — within the chosen category.
+  const counts = useMemo(() => {
+    const inCategory = posts.filter((p) => category === ALL || (p.categoryIds ?? []).includes(category));
+    return {
+      all: inCategory.length,
+      published: inCategory.filter((p) => p.status === "published").length,
+      draft: inCategory.filter((p) => p.status === "draft").length,
+    };
+  }, [posts, category]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return posts
       .filter((p) => status === "all" || p.status === status)
-      .filter((p) => category === ALL || p.categoryIds.includes(category))
+      .filter((p) => category === ALL || (p.categoryIds ?? []).includes(category))
       .filter((p) => !q || p.title.toLowerCase().includes(q) || p.slug.includes(q));
   }, [posts, status, category, search]);
 

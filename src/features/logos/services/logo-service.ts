@@ -2,12 +2,9 @@
  * Saving logos and logo groups. Logos are posts in the "Clients" category,
  * groups are its sub-categories — this keeps the website integration simple.
  */
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { COLLECTIONS } from "@/firebase/collections";
 import type { Category } from "@/features/categories/types";
 import { deleteCategory, saveCategoryChanges, saveNewCategory } from "@/features/categories/services/category-service";
-import { deletePost } from "@/features/posts/repository/post-repository";
+import { deletePost, updatePost } from "@/features/posts/repository/post-repository";
 import { savePost } from "@/features/posts/services/post-service";
 import type { PostInput } from "@/features/posts/types";
 import { LOGO_FIELDS, LOGOS_ROOT } from "../lib/logo-utils";
@@ -61,7 +58,8 @@ export async function removeLogo(logo: Logo) {
 
 /** Change only the display order (used by the move left/right buttons). */
 export async function setLogoOrder(logoId: string, order: number) {
-  await updateDoc(doc(db(), COLLECTIONS.posts, logoId), { [`customFields.${LOGO_FIELDS.order}`]: order });
+  // Only this one value changes (dotted path), so other custom fields are kept.
+  await updatePost(logoId, { [`customFields.${LOGO_FIELDS.order}`]: order } as never);
 }
 
 /**

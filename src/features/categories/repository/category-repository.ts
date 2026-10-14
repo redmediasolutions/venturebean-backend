@@ -1,48 +1,44 @@
 /**
- * All Firestore reads/writes for categories live here.
+ * Categories — read and saved through the server API (/api/categories),
+ * the same way posts use /api/posts.
  */
-import {
-  addDoc,
-  collection,
-  doc,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { COLLECTIONS } from "@/firebase/collections";
-import { toDate } from "@/firebase/converters";
+import { apiDelete, apiGet, apiPatch, apiPost, toDate } from "@/lib/api-client";
+import { invalidate } from "@/hooks/use-api-resource";
 import type { Category, CategoryInput } from "../types";
 
-export const categoriesCollection = () => collection(db(), COLLECTIONS.categories);
+export const CATEGORIES_KEY = "categories";
 
-export const categoriesQuery = () => query(categoriesCollection(), orderBy("name"));
-
-export function mapCategory(d: QueryDocumentSnapshot<DocumentData>): Category {
-  const data = d.data();
+export function mapCategory(raw: Record<string, unknown>): Category {
   return {
-    id: d.id,
-    name: data.name ?? "",
-    slug: data.slug ?? "",
-    description: data.description ?? "",
-    parentId: data.parentId ?? null,
-    createdAt: toDate(data.createdAt),
-    updatedAt: toDate(data.updatedAt),
+    id: String(raw.id),
+    name: String(raw.name ?? ""),
+    slug: String(raw.slug ?? ""),
+    description: String(raw.description ?? ""),
+    parentId: (raw.parentId as string | null) ?? null,
+    image: (raw.image as string | null) ?? null,
+    createdAt: toDate(raw.createdAt),
+    updatedAt: toDate(raw.updatedAt),
   };
 }
 
-export async function createCategory(input: CategoryInput) {
-  const ref = await addDoc(categoriesCollection(), {
-    ...input,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return ref.id;
+export async function fetchCategories(): Promise<Category[]> {
+  const { categories } = await apiGet<{ categories: Record<string, unknown>[] }>("/api/categories");
+  return (categories ?? []).map(mapCategory);
 }
 
-export async function updateCategory(id: string, input: CategoryInput) {
-  await updateDoc(doc(db(), COLLECTIONS.categories, id), { ...input, updatedAt: serverTimestamp() });
+/** Create a category and return its id. */
+export async function createCategory(input: CategoryInput & { image?: string | null }): Promise<string> {
+  const { id } = await apiPost<{ id: string }>("/api/categories", input);
+  invalidate(CATEGORIES_KEY);
+  return id;
+}
+
+export async function updateCategory(id: string, input: Partial<CategoryInput> & { image?: string | null }) {
+  await apiPatch(`/api/categories/${encodeURIComponent(id)}`, input);
+  invalidate(CATEGORIES_KEY, "posts");
+}
+
+export async function deleteCategoryById(id: string) {
+  await apiDelete(`/api/categories/${encodeURIComponent(id)}`);
+  invalidate(CATEGORIES_KEY, "posts");
 }

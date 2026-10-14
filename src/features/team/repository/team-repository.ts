@@ -1,36 +1,33 @@
-import {
-  collection,
-  deleteDoc,
-  doc,
-  query,
-  serverTimestamp,
-  setDoc,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { COLLECTIONS } from "@/firebase/collections";
-import { toDate } from "@/firebase/converters";
-import type { TeamMember } from "../types";
+/** Team (admins) — read and changed through /api/team. */
+import { apiDelete, apiGet, apiPost, toDate } from "@/lib/api-client";
+import { invalidate } from "@/hooks/use-api-resource";
+import type { NewMemberInput, TeamMember } from "../types";
 
-// No orderBy here: admins added by hand in the console may not have a createdAt field.
-export const teamQuery = () => query(collection(db(), COLLECTIONS.admins));
+export const TEAM_KEY = "team";
 
-export function mapMember(d: QueryDocumentSnapshot<DocumentData>): TeamMember {
-  const data = d.data({ serverTimestamps: "estimate" });
+export function mapMember(raw: Record<string, unknown>): TeamMember {
   return {
-    uid: d.id,
-    name: data.name ?? "",
-    email: data.email ?? "",
-    role: data.role === "owner" ? "owner" : "admin",
-    createdAt: toDate(data.createdAt),
+    uid: String(raw.id),
+    name: String(raw.name ?? raw.displayName ?? ""),
+    email: String(raw.email ?? ""),
+    role: raw.role === "owner" ? "owner" : "admin",
+    createdAt: toDate(raw.createdAt),
   };
 }
 
-export async function addAdminRecord(uid: string, data: { name: string; email: string; addedBy: string }) {
-  await setDoc(doc(db(), COLLECTIONS.admins, uid), { ...data, role: "admin", createdAt: serverTimestamp() });
+export async function fetchTeam(): Promise<TeamMember[]> {
+  const { members } = await apiGet<{ members: Record<string, unknown>[] }>("/api/team");
+  return (members ?? []).map(mapMember);
 }
 
-export async function removeAdminRecord(uid: string) {
-  await deleteDoc(doc(db(), COLLECTIONS.admins, uid));
+/** Creates the member's login and gives them admin access (on the server). */
+export async function addMember(input: NewMemberInput): Promise<string> {
+  const { uid } = await apiPost<{ uid: string }>("/api/team", input);
+  invalidate(TEAM_KEY);
+  return uid;
+}
+
+export async function removeMember(uid: string) {
+  await apiDelete(`/api/team/${encodeURIComponent(uid)}`);
+  invalidate(TEAM_KEY);
 }

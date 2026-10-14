@@ -94,6 +94,10 @@ function stripHtml(value: string): string {
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/gi, " ")
+    // Numeric entities WordPress adds to titles, e.g. &#8217; (’) and &#8211; (–).
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&hellip;/gi, "…")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#039;|&apos;/gi, "'")

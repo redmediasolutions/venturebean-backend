@@ -1,10 +1,13 @@
 "use client";
 
-import { useCollection } from "@/hooks/use-collection";
-import { mapMedia, mediaQuery } from "../repository/media-repository";
+import { useApiResource } from "@/hooks/use-api-resource";
+import { fetchMedia, MEDIA_KEY } from "../repository/media-repository";
+import type { MediaItem } from "../types";
 
-/** Live list of everything in the Media Library (newest first). */
+const EMPTY: MediaItem[] = [];
+
+/** Everything in the Media Library (newest first). Refreshes after uploads. */
 export function useMedia() {
-  const { data, loading, error } = useCollection(mediaQuery, mapMedia);
+  const { data, loading, error } = useApiResource(MEDIA_KEY, fetchMedia, EMPTY);
   return { media: data, loading, error };
 }

@@ -2,54 +2,27 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { postsQuery } from "../repository/post-repository";
+import { POSTS_KEY, postsQuery } from "../repository/post-repository";
+import { useApiResource } from "@/hooks/use-api-resource";
 import type { Post } from "../types";
+
+const NO_POSTS: Post[] = [];
 
 /**
  * Loads posts through the authenticated Next.js API.
  *
  * Authentication is handled by the HTTP-only session cookie.
- * No Firebase Client SDK or Firestore subscription is required.
+ * All screens share one copy: after a post is saved or deleted the list
+ * refreshes everywhere (see invalidate("posts") in the repository).
  */
 export function usePosts() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * Fetch the latest posts.
-   */
+  const { data, loading, error, refresh } = useApiResource(POSTS_KEY, postsQuery, NO_POSTS);
   const refreshPosts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result: Post[] = await postsQuery();
-
-      setPosts(result);
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to load posts.";
-
-      console.error("Failed to fetch posts:", err);
-
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  /**
-   * Fetch posts when the hook mounts.
-   */
-  useEffect(() => {
-    void refreshPosts();
-  }, [refreshPosts]);
+    await refresh();
+  }, [refresh]);
 
   return {
-    posts,
+    posts: data,
     loading,
     error,
     refreshPosts,

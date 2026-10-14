@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCategories } from "@/features/categories/hooks/use-categories";
@@ -9,7 +11,12 @@ import { usePosts } from "@/features/posts/hooks/use-posts";
 
 export default function CategoriesPage() {
   const { categories, tree, loading } = useCategories();
-  const { countsByCategory } = usePosts();
+  const { posts } = usePosts();
+  const countsByCategory = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of posts) for (const id of p.categoryIds ?? []) m.set(id, (m.get(id) ?? 0) + 1);
+    return m;
+  }, [posts]);
 
   return (
     <>
