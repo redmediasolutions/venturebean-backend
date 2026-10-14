@@ -3,6 +3,7 @@ export interface Category {
   name: string;
   slug: string;
   description: string;
+  image: string | null;
   /** Parent category id (for sub-categories), or null for a top-level category. */
   parentId: string | null;
   createdAt: Date | null;

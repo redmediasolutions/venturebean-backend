@@ -1,45 +1,113 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useCollection } from "@/hooks/use-collection";
-import { getPost, mapPost, postsQuery } from "../repository/post-repository";
+import { useCallback, useEffect, useState } from "react";
+
+import { postsQuery } from "../repository/post-repository";
 import type { Post } from "../types";
 
-/** Live list of all posts (most recently edited first). */
+/**
+ * Loads posts through the authenticated Next.js API.
+ *
+ * Authentication is handled by the HTTP-only session cookie.
+ * No Firebase Client SDK or Firestore subscription is required.
+ */
 export function usePosts() {
-  const { data, loading, error } = useCollection(postsQuery, mapPost);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const countsByCategory = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of data) for (const id of p.categoryIds) m.set(id, (m.get(id) ?? 0) + 1);
-    return m;
-  }, [data]);
+  /**
+   * Fetch the latest posts.
+   */
+  const refreshPosts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  return { posts: data, countsByCategory, loading, error };
+    try {
+      const result: Post[] = await postsQuery();
+
+      setPosts(result);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to load posts.";
+
+      console.error("Failed to fetch posts:", err);
+
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
+   * Fetch posts when the hook mounts.
+   */
+  useEffect(() => {
+    void refreshPosts();
+  }, [refreshPosts]);
+
+  return {
+    posts,
+    loading,
+    error,
+    refreshPosts,
+    refetch: refreshPosts,
+  };
 }
 
-/** Load a single post for the edit screen. */
-export function usePost(id: string | undefined) {
+/**
+ * Fetches a single post by ID.
+ *
+ * Usage:
+ * const { post, loading, error, refetch } = usePost(id);
+ */
+export function usePost(id: string) {
   const [post, setPost] = useState<Post | null>(null);
-  const [loading, setLoading] = useState(Boolean(id));
-  const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
+  const refreshPost = useCallback(async () => {
+    if (!id) {
+      setPost(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
-    getPost(id)
-      .then((p) => {
-        if (cancelled) return;
-        setPost(p);
-        setNotFound(!p);
-      })
-      .catch(() => !cancelled && setNotFound(true))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+    setError(null);
+
+    try {
+      const result = await import("../repository/post-repository").then(
+        ({ getPost }) => getPost(id),
+      );
+
+      setPost(result);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to load post.";
+
+      console.error("Failed to fetch post:", err);
+      setError(message);
+      setPost(null);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  return { post, loading, notFound };
+  useEffect(() => {
+    void refreshPost();
+  }, [refreshPost]);
+
+  return {
+    post,
+    loading,
+    error,
+    refreshPost,
+    refetch: refreshPost,
+  };
 }

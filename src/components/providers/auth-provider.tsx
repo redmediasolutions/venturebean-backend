@@ -1,196 +1,339 @@
 "use client";
 
-/**
- * Keeps track of who is logged in and whether they are an admin.
- *
- * How access works:
- *  - The FIRST person to create an account becomes the owner (admin) automatically.
- *  - After that, new people are added by an admin in Settings → Team.
- *  - An account is an admin when a document exists at  admins/{their user id}.
- */
-import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
-  createUserWithEmailAndPassword,
-  deleteUser,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  updateProfile,
-  type User,
-} from "firebase/auth";
-import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
-import { db, firebaseAuth, isFirebaseConfigured } from "@/firebase/config";
-import { COLLECTIONS, SETUP_DOC_ID } from "@/firebase/collections";
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 /**
- * - "checking"      still loading
- * - "admin"         full access
- * - "not-admin"     signed in, but nobody has given this account access
- * - "rules-blocked" Firestore security rules haven't been published yet
+ * User information returned by our Next.js backend.
+ *
+ * This is intentionally not a Firebase User object.
+ * The Firebase Client SDK is not used in this provider.
  */
-export type AccessStatus = "checking" | "admin" | "not-admin" | "rules-blocked";
+export interface AdminUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+}
 
-/** null = still loading. "blocked" = can't tell because the rules aren't published. */
+/**
+ * Access status:
+ * - checking: access is being verified
+ * - admin: user has admin access
+ * - not-admin: signed in, but not an admin
+ * - rules-blocked: retained for compatibility with existing UI
+ */
+export type AccessStatus =
+  | "checking"
+  | "admin"
+  | "not-admin"
+  | "rules-blocked";
+
+/**
+ * Setup state:
+ * - null: still loading
+ * - needed: initial owner account has not been created
+ * - done: setup has been completed
+ * - blocked: setup status cannot be determined
+ */
 export type SetupState = null | "needed" | "done" | "blocked";
 
 interface AuthContextValue {
-  user: User | null;
+  user: AdminUser | null;
   isAdmin: boolean;
   access: AccessStatus;
   setup: SetupState;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  createOwnerAccount: (name: string, email: string, password: string) => Promise<void>;
+  createOwnerAccount: (
+    name: string,
+    email: string,
+    password: string
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   recheckAccess: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-const isPermissionError = (err: unknown) => (err as { code?: string })?.code === "permission-denied";
-
-const setupRef = () => doc(db(), COLLECTIONS.settings, SETUP_DOC_ID);
-const adminRef = (uid: string) => doc(db(), COLLECTIONS.admins, uid);
-
-async function checkAccess(u: User): Promise<AccessStatus> {
-  try {
-    const snap = await getDoc(adminRef(u.uid));
-    if (!snap.exists()) return "not-admin";
-    // Admin added by hand in the console before setup existed? Mark setup as done
-    // (so strangers can't use "Create account" to become an admin) and fill in
-    // the details the Team list shows.
-    try {
-      const setup = await getDoc(setupRef());
-      const data = snap.data();
-      if (!setup.exists()) await setDoc(setupRef(), { ownerUid: u.uid, completedAt: serverTimestamp() });
-      if (!data.email || !data.role || !data.createdAt) {
-        await setDoc(
-          adminRef(u.uid),
-          {
-            email: data.email || u.email || "",
-            name: data.name || u.displayName || "",
-            role: data.role || (setup.exists() ? "admin" : "owner"),
-            createdAt: data.createdAt || serverTimestamp(),
-          },
-          { merge: true }
-        );
-      }
-    } catch {
-      /* not critical */
-    }
-    return "admin";
-  } catch (err) {
-    console.error("Admin check failed:", err);
-    return isPermissionError(err) ? "rules-blocked" : "not-admin";
-  }
+interface SessionResponse {
+  authenticated: boolean;
+  user?: AdminUser | null;
+  access?: AccessStatus;
+  setup?: SetupState;
+  error?: string;
+  message?: string;
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [access, setAccess] = useState<AccessStatus>("checking");
-  const [authLoading, setAuthLoading] = useState(isFirebaseConfigured);
-  const [setup, setSetup] = useState<SetupState>(null);
-  // While the owner account is being created, skip the normal admin check
-  // (the admin document doesn't exist until a moment later).
-  const creatingOwner = useRef(false);
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-  // Who is signed in?
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    return onAuthStateChanged(firebaseAuth(), async (u) => {
-      if (creatingOwner.current) {
-        setUser(u);
+/**
+ * Parse a backend response without assuming that it contains JSON.
+ */
+async function readResponse<T>(
+  response: Response
+): Promise<T> {
+  const text = await response.text();
+
+  let data: unknown;
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      text || `Request failed with status ${response.status}.`
+    );
+  }
+
+  if (!response.ok) {
+    const errorData = data as {
+      error?: string;
+      message?: string;
+    };
+
+    throw new Error(
+      errorData.error ||
+        errorData.message ||
+        `Request failed with status ${response.status}.`
+    );
+  }
+
+  return data as T;
+}
+
+/**
+ * Keeps track of the authenticated user using the server session.
+ *
+ * Authentication cookies must be HTTP-only and created by the
+ * Next.js backend. No Firebase Client SDK is used here.
+ */
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [user, setUser] = useState<AdminUser | null>(null);
+
+  const [access, setAccess] =
+    useState<AccessStatus>("checking");
+
+  const [setup, setSetup] = useState<SetupState>(null);
+
+  const [authLoading, setAuthLoading] = useState(true);
+
+  /**
+   * Fetch the current session from the backend.
+   */
+  const refreshSession = useCallback(async () => {
+    setAuthLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      const data = await readResponse<SessionResponse>(response);
+
+      setSetup(data.setup ?? "blocked");
+
+      if (!data.authenticated || !data.user) {
+        setUser(null);
+        setAccess("checking");
         return;
       }
-      setAuthLoading(true);
-      setUser(u);
-      setAccess(u ? await checkAccess(u) : "checking");
+
+      setUser(data.user);
+      setAccess(data.access ?? "not-admin");
+    } catch (error) {
+      console.error("Session verification failed:", error);
+
+      setUser(null);
+      setAccess("checking");
+      setSetup((current) => current ?? "blocked");
+    } finally {
       setAuthLoading(false);
-    });
+    }
   }, []);
 
-  // Has the owner account been created yet? (Public info — decides whether to show "Create account".)
+  /**
+   * Load the session when the provider mounts.
+   *
+   * The HTTP-only cookie is sent automatically by the browser.
+   */
   useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    return onSnapshot(
-      setupRef(),
-      (snap) => setSetup(snap.exists() ? "done" : "needed"),
-      (err) => setSetup(isPermissionError(err) ? "blocked" : "done")
-    );
+    void refreshSession();
+  }, [refreshSession]);
+
+  /**
+   * Sign in through the Next.js backend.
+   *
+   * The backend verifies the credentials and creates an HTTP-only
+   * Firebase session cookie.
+   */
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      setAuthLoading(true);
+
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          cache: "no-store",
+          body: JSON.stringify({
+            email: email.trim(),
+            password,
+          }),
+        });
+
+        await readResponse<{ success: boolean }>(response);
+
+        await refreshSession();
+      } catch (error) {
+        setUser(null);
+        setAccess("checking");
+        throw error;
+      } finally {
+        setAuthLoading(false);
+      }
+    },
+    [refreshSession]
+  );
+
+  /**
+   * Create the initial owner account.
+   *
+   * The backend must verify that initial setup has not already
+   * been completed before creating the owner.
+   */
+  const createOwnerAccount = useCallback(
+    async (name: string, email: string, password: string) => {
+      setAuthLoading(true);
+
+      try {
+        const response = await fetch(
+          "/api/auth/create-owner",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "same-origin",
+            cache: "no-store",
+            body: JSON.stringify({
+              name: name.trim(),
+              email: email.trim(),
+              password,
+            }),
+          }
+        );
+
+        await readResponse<{ success: boolean }>(response);
+
+        await refreshSession();
+      } catch (error) {
+        setUser(null);
+        setAccess("checking");
+        throw error;
+      } finally {
+        setAuthLoading(false);
+      }
+    },
+    [refreshSession]
+  );
+
+  /**
+   * Sign out by clearing the server-side session cookie.
+   */
+  const signOut = useCallback(async () => {
+    setAuthLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      await readResponse<{ success: boolean }>(response);
+
+      setUser(null);
+      setAccess("checking");
+    } finally {
+      setAuthLoading(false);
+    }
   }, []);
+
+  /**
+   * Request a password-reset email through the backend.
+   */
+  const resetPassword = useCallback(
+    async (email: string) => {
+      const response = await fetch(
+        "/api/auth/reset-password",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          cache: "no-store",
+          body: JSON.stringify({
+            email: email.trim(),
+          }),
+        }
+      );
+
+      await readResponse<{ success: boolean }>(response);
+    },
+    []
+  );
+
+  /**
+   * Recheck the current user's session and admin permissions.
+   */
+  const recheckAccess = useCallback(async () => {
+    await refreshSession();
+  }, [refreshSession]);
 
   const value: AuthContextValue = {
     user,
     isAdmin: access === "admin",
     access,
     setup,
-    loading: authLoading || (Boolean(user) && access === "checking"),
-
-    signIn: async (email, password) => {
-      await signInWithEmailAndPassword(firebaseAuth(), email, password);
-    },
-
-    /** First-time setup: create the owner account and make it an admin in one go. */
-    createOwnerAccount: async (name, email, password) => {
-      creatingOwner.current = true;
-      setAccess("checking");
-      let cred;
-      try {
-        cred = await createUserWithEmailAndPassword(firebaseAuth(), email, password);
-      } catch (err) {
-        creatingOwner.current = false;
-        throw err;
-      }
-      try {
-        if (name) await updateProfile(cred.user, { displayName: name });
-        const batch = writeBatch(db());
-        batch.set(adminRef(cred.user.uid), {
-          name,
-          email,
-          role: "owner",
-          createdAt: serverTimestamp(),
-        });
-        batch.set(setupRef(), { ownerUid: cred.user.uid, completedAt: serverTimestamp() });
-        await batch.commit();
-        setAccess("admin");
-        setSetup("done");
-      } catch (err) {
-        // Roll back so the email can be used again once the problem is fixed.
-        await deleteUser(cred.user).catch(() => {});
-        setUser(null);
-        if (isPermissionError(err)) {
-          throw new Error(
-            "Firebase blocked the setup. Either an owner already exists, or the Firestore security rules haven't been published yet (see the box above)."
-          );
-        }
-        throw err;
-      } finally {
-        creatingOwner.current = false;
-      }
-    },
-
-    signOut: async () => {
-      await firebaseSignOut(firebaseAuth());
-    },
-
-    resetPassword: async (email) => {
-      await sendPasswordResetEmail(firebaseAuth(), email);
-    },
-
-    recheckAccess: async () => {
-      if (!user) return;
-      setAccess("checking");
-      setAccess(await checkAccess(user));
-    },
+    loading: authLoading || access === "checking" && Boolean(user),
+    signIn,
+    createOwnerAccount,
+    signOut,
+    resetPassword,
+    recheckAccess,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
-  return ctx;
+/**
+ * Access authentication state from any component inside AuthProvider.
+ */
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error(
+      "useAuth must be used inside <AuthProvider>"
+    );
+  }
+
+  return context;
 }

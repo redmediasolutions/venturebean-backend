@@ -1,68 +1,61 @@
 "use client";
 
-/**
- * Gives every page the category id of each Knowledge Hub section,
- * creating the categories on first use.
- */
 import { createContext, createElement, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import { useFieldGroups } from "@/features/custom-fields/hooks/use-field-groups";
-import { SECTIONS } from "../lib/sections";
-import { ensureSectionCategories, ensureSectionFields } from "../services/section-service";
+import { ensureSectionFields } from "../services/section-service";
 
 interface SectionsContextValue {
-  /** section slug → category id (empty until loaded) */
+  /** category slug → category id */
   categoryIds: Record<string, string>;
   ready: boolean;
 }
 
-// Only try to create the extra fields once per page load (avoids duplicates).
 let fieldsAttempted = false;
 
 const SectionsContext = createContext<SectionsContextValue>({ categoryIds: {}, ready: false });
 
 export function SectionsProvider({ children }: { children: React.ReactNode }) {
-  const { categories, loading } = useCategories();
+  const { categories, loading: categoriesLoading } = useCategories();
   const { groups, loading: groupsLoading } = useFieldGroups();
-  const [ids, setIds] = useState<Record<string, string>>({});
   const running = useRef(false);
 
-  const fromCategories = useMemo(() => {
-    const bySlug = new Map(categories.map((c) => [c.slug, c.id]));
-    const found: Record<string, string> = {};
-    for (const s of SECTIONS) {
-      const id = bySlug.get(s.slug);
-      if (id) found[s.slug] = id;
+  // Directly map existing categories by slug without hardcoded section filters
+  const categoryIds = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of categories) {
+      if (c.slug) map[c.slug] = c.id;
     }
-    return found;
+    return map;
   }, [categories]);
 
-  const complete = Object.keys(fromCategories).length === SECTIONS.length;
-
   useEffect(() => {
-    if (loading || groupsLoading || running.current) return;
-    if (complete && (fieldsAttempted || groups.some((g) => g.title === "Links & downloads"))) return;
+    if (categoriesLoading || groupsLoading || running.current) return;
+    if (fieldsAttempted || groups.some((g) => g.title === "Links & downloads")) return;
+
     running.current = true;
     (async () => {
       try {
-        const created = complete ? fromCategories : await ensureSectionCategories(categories);
-        setIds(created);
         if (!fieldsAttempted) {
           fieldsAttempted = true;
-          await ensureSectionFields(groups, Object.values(created));
+          await ensureSectionFields(groups, Object.values(categoryIds));
         }
       } catch (err) {
-        console.error("Could not set up Knowledge Hub sections:", err);
+        console.error("Could not set up section fields:", err);
       } finally {
         running.current = false;
       }
     })();
-  }, [loading, groupsLoading, complete, fromCategories, categories, groups]);
+  }, [categoriesLoading, groupsLoading, categoryIds, groups]);
 
   const value = useMemo(
-    () => ({ categoryIds: complete ? fromCategories : ids, ready: complete || Object.keys(ids).length === SECTIONS.length }),
-    [complete, fromCategories, ids]
+    () => ({
+      categoryIds,
+      ready: !categoriesLoading && !groupsLoading,
+    }),
+    [categoryIds, categoriesLoading, groupsLoading]
   );
+
   return createElement(SectionsContext.Provider, { value }, children);
 }
 

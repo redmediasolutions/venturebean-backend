@@ -22,10 +22,7 @@ export const SHOW_ADVANCED = false;
 /** The menu on the left. Add, remove or reorder items here. */
 export const NAV_GROUPS: NavGroup[] = [
   { items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }] },
-  {
-    title: "Knowledge Hub",
-    items: SECTIONS.map((s) => ({ label: s.name, href: `/content/${s.slug}`, icon: s.icon })),
-  },
+  { items: [{ label: "Posts", href: "/posts", icon: LayoutDashboard }] },
   {
     title: "Website",
     items: [
