@@ -612,6 +612,22 @@ const imported = result.post;
 
       : null;
 
+    const importedStatus: PostInput["status"] =
+  imported.status === "publish" ? "published" : "draft";
+
+const importedCreatedAt = imported.createdAt
+  ? new Date(imported.createdAt)
+  : null;
+
+const importedPublishedAt =
+  importedStatus === "published" && imported.publishedAt
+    ? new Date(imported.publishedAt)
+    : null;
+
+const importedUpdatedAt = imported.updatedAt
+  ? new Date(imported.updatedAt)
+  : null;
+
     // ============================================================
 
     // BUILD POST INPUT
@@ -619,44 +635,42 @@ const imported = result.post;
     // ============================================================
 
     const postInput: PostInput = {
+  title: imported.title.trim(),
 
-      title: imported.title.trim(),
+  slug: slugify(imported.slug || imported.title),
 
-      slug: slugify(
+  content: imported.contentHtml,
 
-        imported.slug || imported.title,
+  excerpt: imported.excerpt?.trim() ?? "",
 
-      ),
+  featuredImage,
 
-      content: imported.contentHtml,
+  categoryIds: [wordpressCategoryId],
 
-      excerpt: imported.excerpt?.trim() ?? "",
+  // Preserve the original WordPress status.
+  status: importedStatus,
 
-      featuredImage,
+  // Preserve the original publication date.
+  publishedAt: importedPublishedAt,
 
-      categoryIds: [wordpressCategoryId],
+  seoTitle: imported.title.trim(),
 
-      status: "draft",
+  seoDescription: imported.excerpt?.trim() ?? "",
 
-      publishedAt: null,
+  customFields: {},
 
-      seoTitle: imported.title.trim(),
+  authorId: user.uid,
 
-      seoDescription: imported.excerpt?.trim() ?? "",
+  authorName:
+    user.displayName ||
+    user.email ||
+    "VentureBean Admin",
 
-      customFields: {},
-
-      authorId: user.uid,
-
-      authorName:
-
-        user.displayName ||
-
-        user.email ||
-
-        "VentureBean Admin",
-
-    };
+  // These two fields require the PostInput type and savePost()
+  // service to support importing original timestamps.
+  createdAt: importedCreatedAt,
+  updatedAt: importedUpdatedAt,
+};
 
     // ============================================================
 
@@ -685,10 +699,10 @@ const imported = result.post;
     setWordPressError("");
 
     toast.success(
-
-      "WordPress article imported as a draft.",
-
-    );
+  importedStatus === "published"
+    ? "WordPress article imported and published."
+    : "WordPress article imported as a draft.",
+);
 
     router.push(`/posts/${saved.id}`);
 
