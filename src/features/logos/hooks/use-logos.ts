@@ -26,6 +26,7 @@ export function useLogos() {
         return {
           id: p.id,
           name: p.title,
+          description: p.excerpt ?? "",
           image: p.featuredImage,
           groupId: p.categoryIds.find((id) => groupIds.has(id)) ?? null,
           order: num(f[LOGO_FIELDS.order]),

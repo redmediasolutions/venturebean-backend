@@ -8,6 +8,8 @@ import type { Post } from "@/features/posts/types";
 export interface Logo {
   id: string;
   name: string;
+  /** Short description (stored as the post's excerpt). */
+  description: string;
   image: MediaRef | null;
   /** Group (sub-category of Clients), e.g. Manufacturing. null = no group. */
   groupId: string | null;
@@ -32,6 +34,7 @@ export interface LogoGroup {
 
 export interface LogoInput {
   name: string;
+  description: string;
   image: MediaRef | null;
   groupId: string | null;
   order: number | null;

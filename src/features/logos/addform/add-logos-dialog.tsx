@@ -52,7 +52,7 @@ export function AddLogosDialog({ groups, defaultGroupId, rootId, categories, log
       for (const image of images) {
         const name = nameFromFileName(image.name);
         await createLogo(
-          { name, image: { ...image, alt: image.alt || name }, groupId, order: next++, size: null, onHome: true, onClientsPage: true, published: true },
+          { name, description: "", image: { ...image, alt: image.alt || name }, groupId, order: next++, size: null, onHome: true, onClientsPage: true, published: true },
           rootId,
           categories,
           author

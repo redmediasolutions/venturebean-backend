@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FormField } from "@/components/forms/form-field";
@@ -48,6 +49,7 @@ function Toggle({ label, help, checked, onChange }: { label: string; help: strin
 function EditLogoForm({ logo, onClose, groups, rootId, categories }: Omit<EditLogoDialogProps, "logo"> & { logo: Logo }) {
   const [values, setValues] = useState<LogoInput>({
     name: logo.name,
+    description: logo.description,
     image: logo.image,
     groupId: logo.groupId,
     order: logo.order,
@@ -86,6 +88,16 @@ function EditLogoForm({ logo, onClose, groups, rootId, categories }: Omit<EditLo
         <div className="space-y-4">
           <FormField label="Client name" htmlFor="logo-name" help="Also used as the image description for Google.">
             <Input id="logo-name" value={values.name} onChange={(e) => set({ name: e.target.value })} />
+          </FormField>
+          <FormField label="Short description" htmlFor="logo-description" help="One line about the client, e.g. what they do.">
+            <Textarea
+              id="logo-description"
+              rows={2}
+              maxLength={200}
+              value={values.description}
+              onChange={(e) => set({ description: e.target.value })}
+              placeholder="e.g. Jewellery brand, a Tanishq partnership"
+            />
           </FormField>
           <FormField label="Group" htmlFor="logo-group">
             <LogoGroupSelect id="logo-group" groups={groups} value={values.groupId} onChange={(groupId) => set({ groupId })} />

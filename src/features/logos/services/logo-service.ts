@@ -23,7 +23,7 @@ function toPostInput(input: LogoInput, rootId: string, author: { uid: string; na
     title: input.name.trim() || "Untitled logo",
     slug: p?.slug ?? "",
     content: p?.content ?? "",
-    excerpt: p?.excerpt ?? "",
+    excerpt: input.description.trim(),
     featuredImage: input.image,
     categoryIds: input.groupId ? [rootId, input.groupId] : [rootId],
     status: input.published ? "published" : "draft",
@@ -86,6 +86,22 @@ export async function moveLogo(all: Logo[], visible: Logo[], logo: Logo, dir: -1
     return;
   }
   await Promise.all([setLogoOrder(logo.id, other.order!), setLogoOrder(other.id, logo.order!)]);
+}
+
+/**
+ * Drag and drop: put `draggedId` where `targetId` is, then number every logo
+ * 1, 2, 3… in the new order. Only logos whose number changes are saved.
+ * `all` must be in the current display order.
+ */
+export async function reorderLogos(all: Logo[], draggedId: string, targetId: string) {
+  if (draggedId === targetId) return;
+  const list = [...all];
+  const from = list.findIndex((l) => l.id === draggedId);
+  const to = list.findIndex((l) => l.id === targetId);
+  if (from < 0 || to < 0) return;
+  const [moved] = list.splice(from, 1);
+  list.splice(to, 0, moved);
+  await Promise.all(list.map((l, i) => (l.order === i + 1 ? null : setLogoOrder(l.id, i + 1))));
 }
 
 /* ---------------- Groups ---------------- */

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { getErrorMessage } from "@/lib/format";
 import { useLogos } from "@/features/logos/hooks/use-logos";
-import { ensureLogosRoot, moveLogo } from "@/features/logos/services/logo-service";
+import { ensureLogosRoot, moveLogo, reorderLogos } from "@/features/logos/services/logo-service";
 import { ALL_GROUPS, LogoGroupsBar, NO_GROUP } from "@/features/logos/components/logo-groups-bar";
 import { LogoGrid } from "@/features/logos/components/logo-grid";
 import { EditLogoDialog } from "@/features/logos/components/edit-logo-dialog";
@@ -33,7 +33,7 @@ export default function LogosPage() {
     const q = search.trim().toLowerCase();
     return logos
       .filter((l) => group === ALL_GROUPS || (group === NO_GROUP ? !l.groupId : l.groupId === group))
-      .filter((l) => !q || l.name.toLowerCase().includes(q));
+      .filter((l) => !q || l.name.toLowerCase().includes(q) || l.description.toLowerCase().includes(q));
   }, [logos, group, search]);
 
   const groupName = (id: string | null) => groups.find((g) => g.id === id)?.name ?? null;
@@ -93,10 +93,19 @@ export default function LogosPage() {
                   toast.error(getErrorMessage(err));
                 }
               }}
+              onReorder={async (dragged, target) => {
+                try {
+                  await reorderLogos(logos, dragged.id, target.id);
+                  toast.success(`Moved “${dragged.name}”`);
+                } catch (err) {
+                  toast.error(getErrorMessage(err));
+                }
+              }}
             />
           )}
           <p className="text-xs text-muted-foreground">
-            Tip: hover a logo and use the arrows to change the order. Changes appear on the website after it&apos;s rebuilt.
+            Tip: drag a logo onto another to change the order (or hover and use the arrows). The number on each logo is its
+            position on the website. Changes appear on the website after it&apos;s rebuilt.
           </p>
         </div>
       )}
