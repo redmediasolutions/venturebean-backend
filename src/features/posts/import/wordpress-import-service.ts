@@ -22,6 +22,8 @@ export interface ImportedWordPressPost {
   excerpt: string;
   contentHtml: string;
   featuredImage: string | null;
+  /** Link-only posts (press mentions, PDFs, videos): where the card opens. */
+  linkUrl?: string | null;
   createdAt: string | null;
   publishedAt: string | null;
   updatedAt: string | null;
@@ -92,7 +94,9 @@ export async function requestWordPressPost(postId: number, mode: ImportMode): Pr
     throw new Error(result?.details || result?.error || "The WordPress import did not return an article.");
   }
   if (!result.post.title?.trim()) throw new Error("The imported WordPress article does not have a title.");
-  if (!result.post.contentHtml?.trim()) throw new Error("The imported article does not contain any content.");
+  if (!result.post.contentHtml?.trim() && !result.post.linkUrl) {
+    throw new Error("This WordPress post is empty and its card doesn't link anywhere.");
+  }
   return result.post;
 }
 
@@ -115,7 +119,8 @@ export function toPostInput(imported: ImportedWordPressPost, categoryId: string,
     publishedAt: status === "published" && imported.publishedAt ? new Date(imported.publishedAt) : null,
     seoTitle: imported.title.trim(),
     seoDescription: imported.excerpt?.trim() ?? "",
-    customFields: {},
+    // Link-only posts keep their card link in the "Link" custom field (link_url).
+    customFields: imported.linkUrl ? { link_url: imported.linkUrl } : {},
     authorId: user.uid,
     authorName: user.displayName || user.email || "VentureBean Admin",
     wordpressId: imported.id,

@@ -8,6 +8,13 @@ export const dynamic = "force-dynamic";
 const WORDPRESS_API = "https://venturebean.com/wp-json/wp/v2";
 const WORDPRESS_HOSTS = new Set(["venturebean.com", "www.venturebean.com"]);
 
+/**
+ * WordPress pages whose cards open somewhere else (a press article, a PDF or a
+ * YouTube video). Posts shown there are often empty: the card's link is the
+ * whole point, and it is only stored on the page, not on the post.
+ */
+const CARD_PAGES = ["https://venturebean.com/knowledge-hub/media-spotlight/"];
+
 const S3_BUCKET = process.env.AWS_S3_BUCKET || "redmediaassets";
 const AWS_REGION = process.env.AWS_REGION || "ap-south-1";
 const S3_PUBLIC_BASE_URL = (
@@ -559,6 +566,48 @@ async function rewriteInlineImages(
   return rewrittenHtml;
 }
 
+/** Does the article have anything to show? (WordPress adds a date block and empty paragraphs.) */
+function hasRealContent(html: string): boolean {
+  const withoutDate = html.replace(/<div class="wp-block-post-date"[\s\S]*?<\/div>/gi, "");
+  return stripHtml(withoutDate).length > 0 || /<(img|iframe|video|audio|embed|object|table)\b/i.test(withoutDate);
+}
+
+/** Find where this post's card links to on the WordPress listing pages. */
+async function findCardLink(postId: number): Promise<string | null> {
+  const card = new RegExp(`class="[^"]*\\be-loop-item-${postId}\\b[^"]*"[\\s\\S]*?href="([^"]+)"`);
+  for (const page of CARD_PAGES) {
+    try {
+      const response = await fetch(page, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      if (!response.ok) continue;
+      const match = card.exec(await response.text());
+      if (match) return match[1].replace(/&amp;/g, "&").replace(/&#038;/g, "&").trim();
+    } catch (error) {
+      console.warn("[WordPress import] Could not read card page", { page, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return null;
+}
+
+/** A PDF uploaded to WordPress (e.g. a Leadership Spotlight) is copied to S3 so it outlives WordPress. */
+async function copyPdfToS3(sourceUrl: string, postId: number): Promise<string | null> {
+  try {
+    const url = new URL(sourceUrl);
+    if (!WORDPRESS_HOSTS.has(url.hostname.toLowerCase()) || !/\.pdf$/i.test(url.pathname)) return null;
+    const response = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(30_000) });
+    if (!response.ok) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.subarray(0, 4).toString("ascii") !== "%PDF" || buffer.length > 50 * 1024 * 1024) return null;
+    const key = `venturebean/posts/${postId}/${Date.now()}-${safeFilename(sourceUrl)}`;
+    await s3.send(
+      new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: "application/pdf", CacheControl: "public, max-age=31536000, immutable" }),
+    );
+    return `${S3_PUBLIC_BASE_URL}/${key.split("/").map(encodeURIComponent).join("/")}`;
+  } catch (error) {
+    console.error("[WordPress import] PDF copy failed", { postId, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
 async function authenticateAdmin(request: NextRequest) {
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
@@ -672,7 +721,16 @@ export async function POST(request: NextRequest) {
         originalFeaturedImage;
     }
 
-    if (mode === "full") {
+    // Link-only posts (e.g. Media Spotlight press mentions): no article, the
+    // card opens a link instead. Import them with that link.
+    let linkUrl: string | null = null;
+    if (!hasRealContent(wpPost.content.rendered || "")) {
+      contentHtml = "";
+      linkUrl = await findCardLink(postId);
+      if (linkUrl) linkUrl = (await copyPdfToS3(linkUrl, postId)) || linkUrl;
+    }
+
+    if (mode === "full" && contentHtml) {
       contentHtml = await rewriteInlineImages(contentHtml, postId);
     }
 
@@ -686,6 +744,9 @@ export async function POST(request: NextRequest) {
   excerpt,
   contentHtml,
   featuredImage,
+
+  // Where the card opens when the post has no article of its own.
+  linkUrl,
 
   // Original WordPress creation date.
   createdAt: wpPost.date_gmt || wpPost.date || null,

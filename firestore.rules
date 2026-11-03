@@ -62,5 +62,22 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // Emails left by website visitors before downloading a report
+    // ("Download the full analysis" on Industry Perspectives articles).
+    // Anyone can ADD one (checked below); only admins can see or delete them.
+    match /reportDownloads/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'postId', 'postSlug', 'postTitle', 'pageUrl', 'createdAt'])
+        && request.resource.data.keys().hasAll(['email', 'postId', 'postSlug', 'postTitle', 'pageUrl', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+        && request.resource.data.postId is string && request.resource.data.postId.size() <= 100
+        && request.resource.data.postSlug is string && request.resource.data.postSlug.size() <= 200
+        && request.resource.data.postTitle is string && request.resource.data.postTitle.size() <= 300
+        && request.resource.data.pageUrl is string && request.resource.data.pageUrl.size() <= 500
+        && request.resource.data.createdAt == request.time;
+      allow read, delete: if isAdmin();
+    }
   }
 }

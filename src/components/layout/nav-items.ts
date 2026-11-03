@@ -1,4 +1,4 @@
-import { Award, Blocks, FileText, Folder, Image, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { Award, Blocks, Download, FileText, Folder, Image, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
 import { SECTIONS } from "@/features/sections/lib/sections";
 
 export interface NavItem {
@@ -36,6 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Logos", href: "/logos", icon: Award },
       { label: "Media", href: "/media", icon: Image },
+      { label: "Report downloads", href: "/report-downloads", icon: Download },
     ],
   },
   ...(SHOW_ADVANCED

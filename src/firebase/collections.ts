@@ -9,6 +9,8 @@ export const COLLECTIONS = {
   media: "media",
   settings: "settings",
   admins: "admins",
+  /** Emails from visitors who downloaded a report on the website. */
+  reportDownloads: "reportDownloads",
 } as const;
 
 /**
