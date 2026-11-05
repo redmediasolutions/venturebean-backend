@@ -203,7 +203,7 @@ export function PostForm({ post, defaultCategoryId, lockedCategoryId, basePath =
       </div>
 
       {/* ================= Right sidebar ================= */}
-      <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+      <div className="space-y-6 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:pb-2">
         <Card>
           <CardHeader>
             <CardTitle>Publish</CardTitle>
@@ -270,6 +270,16 @@ export function PostForm({ post, defaultCategoryId, lockedCategoryId, basePath =
           </CardContent>
         </Card>
 
+        {/* Like WordPress: the image shown on cards, at the top of the article and when shared. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Featured image</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ImageInput value={values.featuredImage} onChange={(featuredImage) => set({ featuredImage })} showAlt />
+          </CardContent>
+        </Card>
+
         {!lockedCategoryId && (
         <Card>
           <CardHeader>
@@ -289,14 +299,6 @@ export function PostForm({ post, defaultCategoryId, lockedCategoryId, basePath =
         </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Featured image</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ImageInput value={values.featuredImage} onChange={(featuredImage) => set({ featuredImage })} showAlt />
-          </CardContent>
-        </Card>
       </div>
 
       {post && (
