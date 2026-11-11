@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/firebase/admin";
 import { isAuthError, requireAdmin } from "@/lib/require-admin";
+import { affectsWebsite, requestSiteRebuild } from "@/lib/site-rebuild";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -174,6 +175,11 @@ export async function PATCH(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Published before or after this save → the website needs rebuilding.
+    if (affectsWebsite(snapshot.data()?.status, updates.status ?? snapshot.data()?.status)) {
+      await requestSiteRebuild(`updated “${String(snapshot.data()?.title ?? id)}”`);
+    }
+
     const updatedSnapshot = await postRef.get();
 
     return NextResponse.json({
@@ -229,6 +235,8 @@ export async function DELETE(
     }
 
     await postRef.delete();
+
+    if (affectsWebsite(snapshot.data()?.status)) await requestSiteRebuild(`deleted “${String(snapshot.data()?.title ?? id)}”`);
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

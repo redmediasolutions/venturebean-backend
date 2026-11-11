@@ -4,6 +4,7 @@ import { adminDb } from "@/firebase/admin";
 import { isAuthError, requireAdmin } from "@/lib/require-admin";
 import { readJsonObject, serializeDoc, str } from "@/lib/serialize";
 import { slugify } from "@/lib/slugify";
+import { requestSiteRebuild } from "@/lib/site-rebuild";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
       updatedAt: FieldValue.serverTimestamp(),
     };
     const ref = await db.collection(CATEGORIES).add(data);
+    await requestSiteRebuild(`new category “${data.name}”`);
     return NextResponse.json({ id: ref.id, category: { ...data, id: ref.id, createdAt: null, updatedAt: null } }, { status: 201 });
   } catch (error) {
     console.error("Failed to create category:", error);

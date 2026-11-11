@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/firebase/admin";
 import { isAuthError, requireAdmin } from "@/lib/require-admin";
+import { affectsWebsite, requestSiteRebuild } from "@/lib/site-rebuild";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -174,6 +175,8 @@ export async function POST(request: NextRequest) {
         createdAt: now,
         updatedAt: now,
       });
+
+    if (affectsWebsite(postData.status)) await requestSiteRebuild(`new post “${title}”`);
 
     return NextResponse.json(
       {

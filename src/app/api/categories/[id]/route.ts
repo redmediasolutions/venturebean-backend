@@ -4,6 +4,7 @@ import { adminDb } from "@/firebase/admin";
 import { isAuthError, requireAdmin } from "@/lib/require-admin";
 import { readJsonObject, str } from "@/lib/serialize";
 import { slugify } from "@/lib/slugify";
+import { requestSiteRebuild } from "@/lib/site-rebuild";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +79,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       await batch.commit();
     }
 
+    await requestSiteRebuild("category changed");
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to update category:", error);
@@ -118,6 +120,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     batch.delete(ref);
     await batch.commit();
 
+    await requestSiteRebuild("category changed");
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete category:", error);
